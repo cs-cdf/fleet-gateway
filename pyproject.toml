@@ -36,7 +36,7 @@ server = ["uvicorn>=0.29", "starlette>=0.37"]
 mcp = ["mcp>=1.0"]
 
 # Async support
-async_ = ["aiohttp>=3.9"]
+async-support = ["aiohttp>=3.9"]
 
 # All extras
 all = ["pyyaml>=6.0", "uvicorn>=0.29", "starlette>=0.37", "mcp>=1.0", "aiohttp>=3.9"]
