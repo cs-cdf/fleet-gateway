@@ -44,6 +44,7 @@ Lightweight OpenAI-compatible LLM gateway with smart routing, fallback chains, a
 - **Fallback chains** — if a backend fails, tries the next one automatically
 - **Progressive setup** — works with just env vars, no config file needed
 - **Zero mandatory deps** — stdlib-only core, optional extras for specific features
+- **File attachments** — pass local files directly; images, code, PDFs auto-encoded per backend
 - **Web search** — optional SearXNG integration (self-hosted, no API key)
 - **Web scraping** — optional Firecrawl integration (self-hosted or cloud)
 - **Claude Code MCP** — expose all capabilities as MCP tools
@@ -383,6 +384,72 @@ backends:
 
 ---
 
+## File Attachments
+
+Pass local files directly to any LLM call. fleet-gateway handles encoding transparently — images become base64 data URIs, text/code is read as-is, PDFs are extracted (requires `pypdf`).
+
+```python
+from fleet_gateway import Fleet, call, inject_files, suggest_capability
+
+fleet = Fleet()
+
+# Vision — image analysis (requires a multimodal model)
+response = fleet.call("vision", "Describe this architecture diagram", files=["arch.png"])
+
+# Code review — file content injected automatically
+response = fleet.call("coding", "Review this for security issues", files=["src/auth.py"])
+
+# Mixed — image + code in the same call
+response = fleet.call("vision", "Does the code match the diagram?",
+                       files=["flowchart.png", "main.py"])
+
+# PDF summary (requires: pip install pypdf)
+response = fleet.call("general", "Summarize the key points", files=["report.pdf"])
+
+# Multiple text files
+response = fleet.call("coding", "Find inconsistencies between these files",
+                       files=["models.py", "serializers.py"])
+```
+
+**Auto-routing by file type:**
+
+```python
+from fleet_gateway import suggest_capability
+
+suggest_capability(["photo.png"])              # → "vision"
+suggest_capability(["auth.py", "models.py"])   # → "coding"
+suggest_capability(["report.pdf"])             # → "general"
+suggest_capability(["diagram.png", "app.py"])  # → "vision"  (image wins)
+```
+
+**Module-level helpers:**
+
+```python
+from fleet_gateway import load_file, files_to_blocks, inject_files
+
+# Load a single file as a content block
+block = load_file("auth.py")   # {"type": "text", "text": "# auth.py\n..."}
+block = load_file("photo.png") # {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
+
+# Inject files into an existing messages list
+messages = [{"role": "user", "content": "Review this"}]
+messages = inject_files(messages, files=["auth.py"])
+# → [{"role": "user", "content": [{"type":"text","text":"Review this"}, {"type":"text","text":"# auth.py\n..."}]}]
+```
+
+**Supported file types:**
+- **Images**: PNG, JPEG, GIF, WEBP → base64 data URI (requires vision-capable model)
+- **Text/Code**: `.py`, `.js`, `.ts`, `.md`, `.json`, `.yaml`, `.go`, `.rs`, `.sql`, and 40+ more
+- **PDF**: text extraction via `pypdf` (optional); placeholder shown if not installed
+- **Other**: binary placeholder `[binary file: name, N bytes]`
+
+**Backend compatibility:**
+- `openai_compat` backends receive standard `image_url` content blocks
+- `anthropic` backend automatically converts `image_url` → Anthropic `image/source` format
+- Missing files are skipped with a warning — calls never fail due to a missing file
+
+---
+
 ## Web Tools (Optional)
 
 ### SearXNG — Web Search
@@ -508,7 +575,8 @@ pip install fleet-gateway[mcp]
 
 | Tool | Description |
 |------|-------------|
-| `llm_call` | Call any model or capability alias |
+| `llm_call` | Call any model or capability alias; supports `files=` for local file attachments |
+| `llm_analyze_files` | Analyze files with auto-routing: images→vision, code→coding, docs→general |
 | `llm_search` | Web search via SearXNG |
 | `llm_scrape` | Scrape URLs via Firecrawl |
 | `llm_models` | List available models and status |
@@ -674,6 +742,12 @@ response = fleet.call("general", [{"role": "user", "content": "What is 2+2?"}])
 response = fleet.call("groq/llama-3.3-70b-versatile", "Hello")
 response = fleet.call("coding", "...", system="You are a senior Python developer")
 response = fleet.call("coding", "...", max_tokens=4096, temperature=0.2)
+
+# File attachments — images, code, PDFs injected automatically
+response = fleet.call("vision",  "Describe this diagram",        files=["arch.png"])
+response = fleet.call("coding",  "Review for security issues",   files=["src/auth.py"])
+response = fleet.call("general", "Summarize the key points",     files=["report.pdf"])
+response = fleet.call("vision",  "Does the code match the UML?", files=["diagram.png", "main.py"])
 
 # Web tools
 results = fleet.search("query", num_results=5)

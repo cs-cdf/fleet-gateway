@@ -6,6 +6,41 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.2.0] — 2026-03-18
+
+### File Attachment Support (Phase 1)
+
+**New module: `fleet_gateway.files`**
+- `load_file(path)` — load a local file and return an OpenAI-compatible content block
+  - Images (PNG, JPEG, GIF, WEBP) → `image_url` block with base64 data URI
+  - Text/code (50+ extensions) → `text` block prefixed with filename
+  - PDF → extracted text via `pypdf` (optional); placeholder if not installed
+  - Unknown binary → `[binary file: name, N bytes]` placeholder
+- `files_to_blocks(files)` — convert a list of paths; skips missing files with a warning
+- `inject_files(messages, files)` — inject blocks into the last user message; returns a new list (no mutation)
+- `suggest_capability(files)` — auto-select `vision` / `coding` / `general` by file type
+
+**`Fleet.call()` — new `files=` parameter**
+```python
+fleet.call("vision", "Describe this diagram", files=["arch.png"])
+fleet.call("coding", "Review for security issues", files=["src/auth.py"])
+fleet.call("general", "Summarize these", files=["report.pdf", "notes.md"])
+```
+
+**`backends/anthropic.py` — transparent format conversion**
+- `_to_anthropic_content()`: converts OpenAI `image_url` blocks to Anthropic `image/source` format automatically — callers use the same API regardless of backend
+
+**`mcp.py` — Claude Code MCP tools**
+- `llm_call`: new `files` parameter — pass file paths instead of reading file content yourself
+- `llm_analyze_files` (new tool): auto-routes to `vision`/`coding`/`general` based on file types when `model="auto"`
+
+**Public API exports** — importable from `fleet_gateway` directly:
+```python
+from fleet_gateway import load_file, files_to_blocks, inject_files, suggest_capability
+```
+
+---
+
 ## [0.1.0] — 2026-03-18
 
 ### Initial release
@@ -50,4 +85,5 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
-[0.1.0]: https://github.com/3p4dm4/fleet-gateway/releases/tag/v0.1.0
+[0.2.0]: https://github.com/claudiosesto2021/fleet-gateway/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/claudiosesto2021/fleet-gateway/releases/tag/v0.1.0
