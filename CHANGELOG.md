@@ -6,6 +6,33 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.3.0] — 2026-03-18
+
+### Reliability & Security
+
+**Rate limiting — per-provider sliding window**
+- New module `fleet_gateway/ratelimit.py` — thread-safe sliding-window `RateLimiter`
+- Configured per backend via `rate_limit: <req/min>` in `config.yaml`:
+  ```yaml
+  backends:
+    groq:
+      rate_limit: 30   # free tier: 30 req/min
+    gemini:
+      rate_limit: 15
+    mistral:
+      rate_limit: 2    # Free Experiment plan
+  ```
+- When a backend is at capacity the router skips it immediately (non-blocking) and tries the next fallback — no request stall
+
+**Path traversal fix + size guards (`fleet_gateway/files.py`)**
+- `load_file()` now calls `Path(path).resolve()` — eliminates `../` traversal and symlink escapes before any file is opened
+- Size guards: images capped at 50 MB, text/code at 10 MB; raises `ValueError` on violation
+
+**CI/CD — GitHub Actions**
+- `.github/workflows/test.yml`: runs `pytest` on every push/PR across Python 3.9, 3.10, 3.11, 3.12
+
+---
+
 ## [0.2.0] — 2026-03-18
 
 ### File Attachment Support (Phase 1)
@@ -85,5 +112,6 @@ from fleet_gateway import load_file, files_to_blocks, inject_files, suggest_capa
 
 ---
 
+[0.3.0]: https://github.com/cs-cdf/fleet-gateway/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cs-cdf/fleet-gateway/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cs-cdf/fleet-gateway/releases/tag/v0.1.0

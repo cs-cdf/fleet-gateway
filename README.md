@@ -9,6 +9,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![PyPI](https://img.shields.io/pypi/v/fleet-gateway?label=pypi&color=blue)](https://pypi.org/project/fleet-gateway/)
+[![Tests](https://github.com/cs-cdf/fleet-gateway/actions/workflows/test.yml/badge.svg)](https://github.com/cs-cdf/fleet-gateway/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-Attribution-green)](./LICENSE)
 [![GitHub](https://img.shields.io/badge/github-cs--cdf%2Ffleet--gateway-lightgrey?logo=github)](https://github.com/cs-cdf/fleet-gateway)
 
@@ -330,6 +331,41 @@ response = fleet.call("coding", "Write a hello world")
 ```
 
 See `config.example.yaml` for the full reference with all supported providers.
+
+### Rate limiting
+
+Add `rate_limit` (requests per minute) to any backend to stay within free-tier quotas.
+When a backend is at capacity the router skips it immediately and tries the next fallback — no request is blocked or dropped.
+
+```yaml
+backends:
+  groq:
+    type: openai_compat
+    url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+    rate_limit: 30          # free tier: 30 req/min
+    models:
+      - id: llama-3.3-70b-versatile
+        capabilities: [general, summarize]
+
+  gemini:
+    type: openai_compat
+    url: https://generativelanguage.googleapis.com/v1beta/openai
+    api_key_env: GEMINI_API_KEY
+    rate_limit: 15          # free tier: 15 req/min
+    models:
+      - id: gemini-2.5-flash
+        capabilities: [vision, general]
+
+  mistral:
+    type: openai_compat
+    url: https://api.mistral.ai/v1
+    api_key_env: MISTRAL_API_KEY
+    rate_limit: 2           # Free Experiment plan: 2 req/min
+    models:
+      - id: mistral-large-latest
+        capabilities: [general, translate]
+```
 
 ---
 
