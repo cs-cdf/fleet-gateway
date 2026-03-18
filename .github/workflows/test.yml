@@ -25,7 +25,7 @@ jobs:
         run: pip install --upgrade pip setuptools wheel
 
       - name: Install package
-        run: pip install -e ".[mcp]"
+        run: pip install -e ".[mcp]" pytest
 
       - name: Run tests
         run: python -m pytest tests/ -v
