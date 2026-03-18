@@ -85,5 +85,5 @@ from fleet_gateway import load_file, files_to_blocks, inject_files, suggest_capa
 
 ---
 
-[0.2.0]: https://github.com/claudiosesto2021/fleet-gateway/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/claudiosesto2021/fleet-gateway/releases/tag/v0.1.0
+[0.2.0]: https://github.com/cs-cdf/fleet-gateway/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/cs-cdf/fleet-gateway/releases/tag/v0.1.0

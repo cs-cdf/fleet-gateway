@@ -1,6 +1,20 @@
+```
+ _____ _           _      ___       _
+|  ___| | ___  ___| |_   / _ \__ _| |_ _____      ____ _ _   _
+| |_  | |/ _ \/ _ \ __| | | | / _` | __/ _ \ \ /\ / / _` | | | |
+|  _| | |  __/  __/ |_  | |_| | (_| | ||  __/\ V  V / (_| | |_| |
+|_|   |_|\___|\___|\__|  \__, |\__,_|\__\___| \_/\_/ \__,_|\__, |
+                         |___/                              |___/
+```
+
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![PyPI](https://img.shields.io/pypi/v/fleet-gateway?label=pypi&color=blue)](https://pypi.org/project/fleet-gateway/)
+[![License](https://img.shields.io/badge/license-Attribution-green)](./LICENSE)
+[![GitHub](https://img.shields.io/badge/github-cs--cdf%2Ffleet--gateway-lightgrey?logo=github)](https://github.com/cs-cdf/fleet-gateway)
+
 # fleet-gateway
 
-> Part of the **[FlowState](https://github.com/claudiosesto2021)** ecosystem — a personal productivity and AI system designed and built by [Claudio Sesto](https://github.com/claudiosesto2021).
+> Part of the **[FlowState](https://github.com/cs-cdf)** ecosystem — a personal productivity and AI system designed and built by [Claudio Sesto](https://github.com/cs-cdf).
 > FlowState is a comprehensive framework integrating LLM infrastructure, knowledge management (Zettelkasten), multi-agent reasoning patterns, Claude Code tooling, and production-grade AI workflows.
 > fleet-gateway is its open-sourced LLM routing layer, extracted and generalized for anyone to use.
 
@@ -859,4 +873,4 @@ pip install fleet-gateway[all]
 
 ## License
 
-MIT
+[Attribution License](./LICENSE) — free to use with attribution required. See LICENSE for details.

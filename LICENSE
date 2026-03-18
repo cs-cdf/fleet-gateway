@@ -1,21 +1,38 @@
-MIT License
+fleet-gateway Attribution License
 
-Copyright (c) 2026 fleet-gateway contributors
+Copyright (c) 2026 Claudio Sesto (https://github.com/cs-cdf)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, merge, publish, distribute, and/or sublicense the Software,
+subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. ATTRIBUTION REQUIRED
+   Any use, distribution, or derivative work — public or private, commercial
+   or non-commercial — must retain and clearly display:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   a) The original copyright notice above.
+   b) The project name "fleet-gateway" and its source URL:
+      https://github.com/cs-cdf/fleet-gateway
+   c) In documentation, README files, or any user-facing interface where
+      third-party credits are listed, an acknowledgment of the form:
+        "Powered by fleet-gateway (https://github.com/cs-cdf/fleet-gateway)
+         by Claudio Sesto"
+
+2. NO MISREPRESENTATION
+   You may not represent fleet-gateway as your own original work. The
+   attribution in clause 1 must remain clearly visible and must not be
+   obscured, removed, or replaced.
+
+3. PATENT GRANT
+   The copyright holder grants you a non-exclusive, royalty-free, worldwide
+   license under any patent claims necessarily infringed by the Software.
+
+4. DISCLAIMER
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE.
