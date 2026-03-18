@@ -79,7 +79,7 @@ class TestRouter(unittest.TestCase):
     def test_resolve_entry_missing_backend(self):
         cfg = Config({"backends": {}, "routing": {}})
         router = Router(cfg)
-        backend, model_id = router._resolve_entry("nonexistent/model")
+        backend, backend_name, model_id = router._resolve_entry("nonexistent/model")
         self.assertIsNone(backend)
 
     def test_call_returns_none_when_no_backends(self):

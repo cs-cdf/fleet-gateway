@@ -45,9 +45,9 @@ all = ["pyyaml>=6.0", "uvicorn>=0.29", "starlette>=0.37", "mcp>=1.0", "aiohttp>=
 fleet-gateway = "fleet_gateway.server:main"
 
 [project.urls]
-Repository = "https://github.com/3p4dm4/fleet-gateway"
-Issues = "https://github.com/3p4dm4/fleet-gateway/issues"
-Changelog = "https://github.com/3p4dm4/fleet-gateway/blob/main/CHANGELOG.md"
+Repository = "https://github.com/cs-cdf/fleet-gateway"
+Issues = "https://github.com/cs-cdf/fleet-gateway/issues"
+Changelog = "https://github.com/cs-cdf/fleet-gateway/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]

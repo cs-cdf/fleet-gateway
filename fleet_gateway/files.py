@@ -49,6 +49,10 @@ _MIME = {
     ".webp": "image/webp",
 }
 
+# Size guards to prevent accidental loading of huge files
+_MAX_IMAGE_BYTES = 50 * 1024 * 1024   # 50 MB
+_MAX_TEXT_BYTES  = 10 * 1024 * 1024   # 10 MB
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -64,8 +68,10 @@ def load_file(path) -> dict:
 
     Raises:
         FileNotFoundError: If the file does not exist.
+        ValueError: If the file exceeds the size limit.
     """
-    p = Path(path)
+    # Resolve to canonical absolute path — eliminates ../ traversal and symlinks
+    p = Path(path).resolve()
     ext = p.suffix.lower()
     name = p.name
 
@@ -73,6 +79,9 @@ def load_file(path) -> dict:
         raise FileNotFoundError(f"File not found: {path}")
 
     if ext in _IMAGE_EXTENSIONS:
+        size = p.stat().st_size
+        if size > _MAX_IMAGE_BYTES:
+            raise ValueError(f"Image too large: {size:,} bytes (max {_MAX_IMAGE_BYTES:,})")
         mime = _MIME.get(ext, "image/jpeg")
         data = p.read_bytes()
         b64 = base64.b64encode(data).decode("ascii")
@@ -82,6 +91,9 @@ def load_file(path) -> dict:
         }
 
     if ext in _TEXT_EXTENSIONS:
+        size = p.stat().st_size
+        if size > _MAX_TEXT_BYTES:
+            raise ValueError(f"File too large: {size:,} bytes (max {_MAX_TEXT_BYTES:,})")
         try:
             text = p.read_text(encoding="utf-8", errors="replace")
             return {"type": "text", "text": f"# {name}\n{text}"}

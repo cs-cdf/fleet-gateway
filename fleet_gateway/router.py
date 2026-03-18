@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from .backends import get_backend
 from .config import Config
+from .ratelimit import RateLimiter
 
 
 class Router:
@@ -25,6 +26,8 @@ class Router:
         self._config = config
         # Instantiate backend objects lazily (cache by name)
         self._backend_cache: Dict[str, Any] = {}
+        # Per-backend rate limiters (populated on first access)
+        self._limiters: Dict[str, RateLimiter] = {}
 
     def _get_backend(self, backend_name: str):
         if backend_name not in self._backend_cache:
@@ -34,10 +37,17 @@ class Router:
             self._backend_cache[backend_name] = get_backend(cfg)
         return self._backend_cache[backend_name]
 
+    def _get_limiter(self, backend_name: str) -> RateLimiter:
+        if backend_name not in self._limiters:
+            cfg = self._config.get_backend(backend_name) or {}
+            rpm = cfg.get("rate_limit")
+            self._limiters[backend_name] = RateLimiter(rpm)
+        return self._limiters[backend_name]
+
     def _resolve_entry(self, entry: str):
         """Resolve a routing chain entry like 'groq/llama-3.3-70b-versatile'.
 
-        Returns (backend, model_id) or (None, None).
+        Returns (backend, backend_name, model_id) or (None, None, None).
         """
         if "/" in entry:
             parts = entry.split("/", 1)
@@ -54,13 +64,13 @@ class Router:
                     continue
                 break
             else:
-                return None, None
+                return None, None, None
 
         backend = self._get_backend(backend_name)
         if backend is None or not backend.is_available():
-            return None, None
+            return None, None, None
 
-        return backend, model_id
+        return backend, backend_name, model_id
 
     def call(
         self,
@@ -88,9 +98,14 @@ class Router:
 
         last_error = None
         for entry in chain:
-            backend, model_id = self._resolve_entry(entry)
+            backend, backend_name, model_id = self._resolve_entry(entry)
             if backend is None:
                 _log(f"Skipping {entry!r}: backend unavailable")
+                continue
+
+            limiter = self._get_limiter(backend_name)
+            if not limiter.acquire(timeout=timeout):
+                _log(f"Rate limit exceeded for {entry!r}, trying next...")
                 continue
 
             _log(f"Trying {entry!r}...")
