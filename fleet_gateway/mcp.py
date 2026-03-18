@@ -65,14 +65,18 @@ async def _serve():
                     "Call an LLM model or capability alias. "
                     "Capability aliases: coding, general, reasoning, translate, proofread, "
                     "summarize, creative, fast, italian, vision. "
-                    "Or use a direct reference: 'groq/llama-3.3-70b-versatile'."
+                    "Or use a direct reference: 'groq/llama-3.3-70b-versatile'. "
+                    "When the user references a specific file (e.g. 'review auth.py', "
+                    "'analyze this image'), pass the file path(s) in `files` rather than "
+                    "reading the file content yourself — fleet-gateway handles encoding automatically. "
+                    "Use model='vision' for images, model='coding' for code, model='general' for documents."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "model": {
                             "type": "string",
-                            "description": "Model or capability alias (e.g. 'coding', 'general', 'groq/llama-3.3-70b-versatile')",
+                            "description": "Model or capability alias (e.g. 'coding', 'vision', 'groq/llama-3.3-70b-versatile')",
                         },
                         "prompt": {
                             "type": "string",
@@ -91,6 +95,16 @@ async def _serve():
                             "type": "number",
                             "default": 0.7,
                             "description": "Sampling temperature (0=deterministic, 1=creative)",
+                        },
+                        "files": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Optional list of local file paths to attach "
+                                "(images, code, text, PDF). "
+                                "Images require a vision-capable model. "
+                                "fleet-gateway handles encoding automatically."
+                            ),
                         },
                     },
                     "required": ["model", "prompt"],
@@ -261,6 +275,42 @@ async def _serve():
                     "required": ["topic"],
                 },
             ),
+            Tool(
+                name="llm_analyze_files",
+                description=(
+                    "Analyze one or more local files using the best available LLM. "
+                    "Automatically routes images to vision models, code to coding models, "
+                    "and documents to general models when model='auto'. "
+                    "Use this tool whenever the user references a specific file path, "
+                    "screenshot, image, or document to analyze, review, or summarize."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "files": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of local file paths to analyze",
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "description": "What to analyze or ask about the files",
+                        },
+                        "model": {
+                            "type": "string",
+                            "default": "auto",
+                            "description": (
+                                "Model/capability or 'auto' to select by file type. "
+                                "'auto' picks 'vision' for images, 'coding' for code, 'general' otherwise."
+                            ),
+                        },
+                        "system": {"type": "string", "description": "Optional system prompt"},
+                        "max_tokens": {"type": "integer", "default": 2048},
+                        "temperature": {"type": "number", "default": 0.7},
+                    },
+                    "required": ["files", "prompt"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -273,6 +323,23 @@ async def _serve():
                     system=arguments.get("system"),
                     max_tokens=arguments.get("max_tokens", 2048),
                     temperature=arguments.get("temperature", 0.7),
+                    files=arguments.get("files"),
+                )
+                text = result or "(no response)"
+                return CallToolResult(content=[TextContent(type="text", text=text)])
+
+            elif name == "llm_analyze_files":
+                from .files import suggest_capability
+                model = arguments.get("model", "auto")
+                if model == "auto":
+                    model = suggest_capability(arguments["files"])
+                result = fleet.call(
+                    model,
+                    arguments["prompt"],
+                    system=arguments.get("system"),
+                    max_tokens=arguments.get("max_tokens", 2048),
+                    temperature=arguments.get("temperature", 0.7),
+                    files=arguments["files"],
                 )
                 text = result or "(no response)"
                 return CallToolResult(content=[TextContent(type="text", text=text)])

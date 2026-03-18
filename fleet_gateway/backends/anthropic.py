@@ -57,7 +57,7 @@ class AnthropicBackend(BaseBackend):
             if msg.get("role") == "system":
                 system = msg.get("content", "")
             else:
-                user_messages.append({"role": msg["role"], "content": msg.get("content", "")})
+                user_messages.append({"role": msg["role"], "content": _to_anthropic_content(msg.get("content", ""))})
 
         body: Dict[str, Any] = {
             "model": actual_id,
@@ -89,6 +89,46 @@ class AnthropicBackend(BaseBackend):
         except Exception as e:
             _log(f"[anthropic] Unexpected error: {e}")
             return None
+
+
+def _to_anthropic_content(content):
+    """Convert OpenAI content (str or list) to Anthropic format.
+
+    OpenAI image_url blocks:
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,ABC"}}
+    become Anthropic image source blocks:
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "ABC"}}
+
+    Text blocks and plain strings pass through unchanged.
+    """
+    if isinstance(content, str):
+        return content
+
+    if not isinstance(content, list):
+        return content
+
+    result = []
+    for block in content:
+        if not isinstance(block, dict):
+            result.append(block)
+            continue
+        if block.get("type") == "image_url":
+            url_val = block.get("image_url", {}).get("url", "")
+            if url_val.startswith("data:") and ";base64," in url_val:
+                header, b64_data = url_val.split(";base64,", 1)
+                media_type = header[len("data:"):]
+                result.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": media_type, "data": b64_data},
+                })
+            else:
+                result.append({
+                    "type": "image",
+                    "source": {"type": "url", "url": url_val},
+                })
+        else:
+            result.append(block)
+    return result
 
 
 def _extract_anthropic_content(data: dict) -> Optional[str]:

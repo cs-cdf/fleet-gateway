@@ -1,6 +1,8 @@
 """Basic tests for fleet-gateway core components."""
+import base64
 import os
 import sys
+import tempfile
 import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -90,6 +92,73 @@ class TestRouter(unittest.TestCase):
         cfg = Config({"backends": {}})
         router = Router(cfg)
         self.assertEqual(router.available_models(), [])
+
+
+class TestFileAttachments(unittest.TestCase):
+
+    def setUp(self):
+        from fleet_gateway.files import load_file, files_to_blocks, inject_files, suggest_capability
+        self.load_file = load_file
+        self.files_to_blocks = files_to_blocks
+        self.inject_files = inject_files
+        self.suggest_capability = suggest_capability
+        self.tmp = tempfile.mkdtemp()
+
+    def _write(self, name, content="def f(): pass", mode="w"):
+        path = os.path.join(self.tmp, name)
+        with open(path, mode if mode == "wb" else "w") as f:
+            if mode == "wb":
+                f.write(content)
+            else:
+                f.write(content)
+        return path
+
+    def test_text_file_block(self):
+        path = self._write("auth.py", "secret = 'abc'")
+        block = self.load_file(path)
+        self.assertEqual(block["type"], "text")
+        self.assertIn("auth.py", block["text"])
+
+    def test_image_block_format(self):
+        # Minimal 1x1 PNG
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+        )
+        path = self._write("test.png", png, mode="wb")
+        block = self.load_file(path)
+        self.assertEqual(block["type"], "image_url")
+        url = block["image_url"]["url"]
+        self.assertTrue(url.startswith("data:image/png;base64,"))
+
+    def test_inject_files_into_messages(self):
+        path = self._write("code.py", "x = 1")
+        msgs = [{"role": "user", "content": "Review this"}]
+        result = self.inject_files(msgs, [path])
+        self.assertIsInstance(result[-1]["content"], list)
+        texts = [b["text"] for b in result[-1]["content"] if b["type"] == "text"]
+        self.assertTrue(any("Review this" in t for t in texts))
+
+    def test_inject_preserves_system_message(self):
+        path = self._write("code.py")
+        msgs = [
+            {"role": "system", "content": "You are a reviewer."},
+            {"role": "user", "content": "Check this"},
+        ]
+        result = self.inject_files(msgs, [path])
+        self.assertEqual(result[0]["content"], "You are a reviewer.")
+
+    def test_missing_file_skipped(self):
+        blocks = self.files_to_blocks(["/nonexistent/ghost.py"])
+        self.assertEqual(blocks, [])
+
+    def test_suggest_capability_vision(self):
+        self.assertEqual(self.suggest_capability(["photo.png"]), "vision")
+
+    def test_suggest_capability_coding(self):
+        self.assertEqual(self.suggest_capability(["main.py"]), "coding")
+
+    def test_suggest_capability_auto_selects_vision_mixed(self):
+        self.assertEqual(self.suggest_capability(["main.py", "arch.png"]), "vision")
 
 
 if __name__ == "__main__":

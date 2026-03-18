@@ -38,12 +38,14 @@ from .router import Router
 from .search import SearXNG
 from .scrape import Firecrawl
 from .patterns import Patterns
+from .files import load_file, files_to_blocks, inject_files, suggest_capability
 
 __version__ = "0.1.0"
 __all__ = [
     "Fleet", "Patterns",
     "call", "search", "scrape", "models", "capabilities",
     "consensus", "loop", "review", "challenge", "brainstorm", "swot",
+    "load_file", "files_to_blocks", "inject_files", "suggest_capability",
 ]
 
 
@@ -87,6 +89,7 @@ class Fleet:
         temperature: float = 0.7,
         timeout: float = 120.0,
         system: Optional[str] = None,
+        files: Optional[List[str]] = None,
         **kwargs,
     ) -> Optional[str]:
         """Call an LLM model or capability.
@@ -100,12 +103,17 @@ class Fleet:
             temperature: Sampling temperature (0=deterministic, 1=creative).
             timeout: Seconds to wait for a response.
             system: Optional system prompt (prepended to messages).
+            files: Optional list of local file paths to attach (images, code, text, PDF).
+                   Files are injected as content blocks into the last user message.
+                   Images require a vision-capable model.
             **kwargs: Extra params forwarded to the backend.
 
         Returns:
             Response text, or None if all backends failed.
         """
         msgs = _normalize_messages(messages, system)
+        if files:
+            msgs = inject_files(msgs, files)
         return self._router.call(
             model_or_capability,
             messages=msgs,
