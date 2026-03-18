@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "fleet": {
+      "command": "python",
+      "args": ["-m", "fleet_gateway.mcp"],
+      "env": {
+        "GROQ_API_KEY": "your_groq_key_here",
+        "CEREBRAS_API_KEY": "your_cerebras_key_here",
+        "SAMBANOVA_API_KEY": "your_sambanova_key_here",
+        "MISTRAL_API_KEY": "your_mistral_key_here",
+        "GEMINI_API_KEY": "your_gemini_key_here",
+        "OPENROUTER_API_KEY": "your_openrouter_key_here",
+        "SEARXNG_URL": "http://localhost:8888",
+        "FIRECRAWL_URL": "http://localhost:3002"
+      },
+      "description": "fleet-gateway — LLM routing + web tools. Replace keys with your actual values. At least one LLM key required."
+    }
+  }
+}

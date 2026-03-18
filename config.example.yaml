@@ -1,0 +1,213 @@
+# fleet-gateway — example configuration
+# Copy to config.yaml and customize.
+# All values can be overridden via environment variables (see README).
+#
+# QUICKSTART (no config file needed):
+#   export GROQ_API_KEY=...
+#   export CEREBRAS_API_KEY=...
+#   python -m fleet_gateway.server
+#
+# The gateway auto-discovers backends from env vars.
+# Add this file only when you need custom routing or more control.
+
+# ─────────────────────────────────────────────
+# BACKENDS — where LLMs live
+# ─────────────────────────────────────────────
+backends:
+
+  # ── Free cloud APIs (no hardware needed) ──
+
+  groq:
+    type: openai_compat
+    url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY       # get free at console.groq.com
+    models:
+      - id: llama-3.3-70b-versatile
+        capabilities: [general, translate, summarize]
+      - id: llama3-70b-8192
+        capabilities: [general, coding]
+
+  cerebras:
+    type: openai_compat
+    url: https://api.cerebras.ai/v1
+    api_key_env: CEREBRAS_API_KEY    # get free at cloud.cerebras.ai
+    models:
+      - id: qwen3-235b
+        model_id: qwen-3-235b-a22b-instruct-2507   # actual API id
+        capabilities: [general, coding, reasoning]
+      - id: llama3.1-8b
+        capabilities: [fast, summarize]
+
+  sambanova:
+    type: openai_compat
+    url: https://api.sambanova.ai/v1
+    api_key_env: SAMBANOVA_API_KEY   # get free at cloud.sambanova.ai
+    models:
+      - id: qwen3-235b-sn
+        model_id: Qwen3-235B
+        capabilities: [reasoning, coding, creative]
+      - id: deepseek-v3
+        model_id: DeepSeek-V3.2
+        capabilities: [coding, general]
+
+  mistral:
+    type: openai_compat
+    url: https://api.mistral.ai/v1
+    api_key_env: MISTRAL_API_KEY     # free experiment tier at console.mistral.ai
+    models:
+      - id: mistral-large
+        capabilities: [italian, proofread, creative]
+      - id: codestral
+        capabilities: [coding]
+
+  gemini:
+    type: openai_compat
+    url: https://generativelanguage.googleapis.com/v1beta/openai
+    api_key_env: GEMINI_API_KEY      # get free at aistudio.google.com
+    models:
+      - id: gemini-2.5-flash
+        capabilities: [fast, general, vision]
+      - id: gemini-2.5-pro
+        capabilities: [reasoning, long_context, coding]
+
+  openai:
+    type: openai_compat
+    url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    models:
+      - id: gpt-4o
+        capabilities: [general, coding, vision]
+      - id: gpt-4o-mini
+        capabilities: [fast, general]
+
+  anthropic:
+    type: anthropic                  # native Anthropic API (non-OpenAI compat)
+    api_key_env: ANTHROPIC_API_KEY
+    models:
+      - id: claude-sonnet-4-6
+        model_id: claude-sonnet-4-6
+        capabilities: [reasoning, coding, editorial]
+      - id: claude-haiku-4-5
+        model_id: claude-haiku-4-5-20251001
+        capabilities: [fast, classification]
+
+  openrouter:
+    type: openai_compat
+    url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY  # free models at openrouter.ai
+    models:
+      - id: qwen3-coder-free
+        model_id: qwen/qwen3-coder:free
+        capabilities: [coding]
+      - id: hermes-405b-free
+        model_id: nousresearch/hermes-3-llama-3.1-405b:free
+        capabilities: [general, creative]
+
+  # ── Local models (optional, add when you have hardware) ──
+
+  # local_ollama:
+  #   type: openai_compat
+  #   url: http://localhost:11434/v1
+  #   api_key: ollama            # Ollama requires a non-empty key
+  #   models:
+  #     - id: llama3.1
+  #       capabilities: [general, coding]
+  #     - id: codellama
+  #       capabilities: [coding]
+
+  # local_llama:
+  #   type: openai_compat
+  #   url: http://localhost:8080/v1
+  #   models:
+  #     - id: my-local-model
+  #       capabilities: [general, coding]
+
+  # remote_server:               # your own GPU server
+  #   type: openai_compat
+  #   url: http://192.168.1.100:8100/v1
+  #   models:
+  #     - id: my-fast-model          # replace with your model's actual name
+  #       capabilities: [fast, classification]
+
+
+# ─────────────────────────────────────────────
+# ROUTING — capability → ordered fallback chain
+# ─────────────────────────────────────────────
+# Format: "backend_name/model_id"
+# The gateway tries each entry in order; skips unavailable backends.
+routing:
+  coding:
+    - cerebras/qwen3-235b
+    - sambanova/deepseek-v3
+    - openrouter/qwen3-coder-free
+    - mistral/codestral
+    - groq/llama3-70b-8192
+
+  general:
+    - cerebras/qwen3-235b
+    - groq/llama-3.3-70b-versatile
+    - sambanova/qwen3-235b-sn
+    - gemini/gemini-2.5-flash
+
+  reasoning:
+    - sambanova/qwen3-235b-sn
+    - sambanova/deepseek-v3
+    - cerebras/qwen3-235b
+    - gemini/gemini-2.5-pro
+
+  translate:
+    - groq/llama-3.3-70b-versatile
+    - mistral/mistral-large
+    - cerebras/qwen3-235b
+
+  proofread:
+    - mistral/mistral-large
+    - gemini/gemini-2.5-flash
+    - groq/llama-3.3-70b-versatile
+
+  summarize:
+    - groq/llama-3.3-70b-versatile
+    - cerebras/llama3.1-8b
+    - gemini/gemini-2.5-flash
+
+  creative:
+    - sambanova/qwen3-235b-sn
+    - cerebras/qwen3-235b
+    - openrouter/hermes-405b-free
+    - gemini/gemini-2.5-pro
+
+  fast:
+    - cerebras/llama3.1-8b
+    - groq/llama-3.3-70b-versatile
+    - gemini/gemini-2.5-flash
+
+
+# ─────────────────────────────────────────────
+# GATEWAY SERVER
+# ─────────────────────────────────────────────
+server:
+  host: 0.0.0.0
+  port: 4000
+  max_concurrent: 4    # max parallel requests in flight
+  timeout: 120         # seconds per LLM call
+  log_level: INFO
+
+
+# ─────────────────────────────────────────────
+# WEB TOOLS (optional)
+# ─────────────────────────────────────────────
+tools:
+  searxng:
+    enabled: false
+    url: http://localhost:8888   # your SearXNG instance
+    # url: https://searx.example.com  # or a public instance
+    default_language: en
+    default_categories: [general, news]
+    max_results: 10
+
+  firecrawl:
+    enabled: false
+    url: http://localhost:3002   # self-hosted Firecrawl
+    # url: https://api.firecrawl.dev  # or the cloud service
+    api_key_env: FIRECRAWL_API_KEY   # not needed for self-hosted
+    timeout: 30

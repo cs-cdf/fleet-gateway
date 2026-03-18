@@ -1,0 +1,121 @@
+---
+# fleet-gateway — Full stack docker-compose
+# Includes: gateway + SearXNG + Firecrawl
+#
+# Usage:
+#   cp .env.example .env          # then fill in your API keys
+#   docker compose up -d          # start everything
+#   curl http://localhost:4000/health  # verify gateway
+#
+# Minimal (gateway only, no web tools):
+#   docker compose up -d fleet-gateway
+#
+# Services:
+#   fleet-gateway   → http://localhost:4000  (LLM gateway, OpenAI-compatible)
+#   searxng         → http://localhost:8888  (web search)
+#   firecrawl       → http://localhost:3002  (web scraping)
+#   redis           → internal (required by firecrawl)
+
+services:
+
+  # ── LLM Gateway ─────────────────────────────────────────────
+  fleet-gateway:
+    image: python:3.11-slim
+    container_name: fleet-gateway
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../:/app          # mount the project root
+      - ./config.yaml:/app/config.yaml:ro   # optional config override
+    command: >
+      sh -c "pip install -e /app --quiet && python -m fleet_gateway.server --host 0.0.0.0 --port 4000"
+    ports:
+      - "${FLEET_PORT:-4000}:4000"
+    env_file: .env
+    environment:
+      SEARXNG_URL: http://searxng:8080
+      FIRECRAWL_URL: http://firecrawl-api:3002
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - searxng
+      - firecrawl-api
+
+  # ── SearXNG ──────────────────────────────────────────────────
+  # Self-hosted privacy-respecting meta search engine.
+  # No API key needed. Aggregates Google, Bing, DuckDuckGo, etc.
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      - "${SEARXNG_PORT:-8888}:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      SEARXNG_BASE_URL: http://localhost:${SEARXNG_PORT:-8888}
+      SEARXNG_SECRET_KEY: ${SEARXNG_SECRET_KEY:-change-me-in-production}
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # ── Firecrawl ────────────────────────────────────────────────
+  # Self-hosted web scraping service. Converts any URL to clean Markdown.
+  # No API key needed for self-hosted.
+  firecrawl-api:
+    image: ghcr.io/mendableai/firecrawl:latest
+    container_name: firecrawl-api
+    restart: unless-stopped
+    ports:
+      - "${FIRECRAWL_PORT:-3002}:3002"
+    environment:
+      REDIS_URL: redis://redis:6379
+      NUM_WORKERS_PER_QUEUE: 4
+      PORT: 3002
+      HOST: 0.0.0.0
+      # Optional: if you want to use Firecrawl cloud fallback
+      # FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+    depends_on:
+      - redis
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  firecrawl-worker:
+    image: ghcr.io/mendableai/firecrawl:latest
+    container_name: firecrawl-worker
+    restart: unless-stopped
+    entrypoint: ["pnpm", "run", "workers"]
+    environment:
+      REDIS_URL: redis://redis:6379
+      NUM_WORKERS_PER_QUEUE: 4
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: fleet-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
+
+volumes:
+  redis_data:

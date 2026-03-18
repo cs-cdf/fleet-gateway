@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "fleet-gateway"
+version = "0.1.0"
+description = "Lightweight OpenAI-compatible LLM gateway with routing, fallback chains, and optional web tools"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["llm", "gateway", "openai", "routing", "local-llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+# Zero mandatory external dependencies — stdlib only for the core
+dependencies = []
+
+[project.optional-dependencies]
+# YAML config file support (otherwise use env vars or dict)
+yaml = ["pyyaml>=6.0"]
+
+# Server mode (standalone HTTP gateway)
+server = ["uvicorn>=0.29", "starlette>=0.37"]
+
+# MCP server (Claude Code integration)
+mcp = ["mcp>=1.0"]
+
+# Async support
+async_ = ["aiohttp>=3.9"]
+
+# All extras
+all = ["pyyaml>=6.0", "uvicorn>=0.29", "starlette>=0.37", "mcp>=1.0", "aiohttp>=3.9"]
+
+[project.scripts]
+fleet-gateway = "fleet_gateway.server:main"
+
+[project.urls]
+Repository = "https://github.com/3p4dm4/fleet-gateway"
+Issues = "https://github.com/3p4dm4/fleet-gateway/issues"
+Changelog = "https://github.com/3p4dm4/fleet-gateway/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fleet_gateway*"]
