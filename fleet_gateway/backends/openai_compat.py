@@ -127,10 +127,17 @@ class OpenAICompatBackend(BaseBackend):
 
 
 def _extract_content(data: dict) -> Optional[str]:
-    """Extract text from a /v1/chat/completions response.
+    """Extract the final answer from a /v1/chat/completions response.
 
-    Handles standard content, CoT models (reasoning_content, think tags,
-    deepseek <think> separators).
+    Priority (in order):
+    1. ``content`` — standard field; always the clean answer when non-empty.
+    2. ``reasoning`` — vLLM reasoning-parser (``--reasoning-parser qwen3``) puts
+       the extracted clean answer here when ``content`` is null/empty.
+    3. ``reasoning_content`` — Cogito/Apriel put the full answer here;
+       deepseek models also use it for raw thinking (content empty = hit
+       max_tokens mid-think).  Best-effort: strip think tags.
+
+    Think tags are stripped defensively at every level.
     """
     if not isinstance(data, dict):
         return None
@@ -139,32 +146,40 @@ def _extract_content(data: dict) -> Optional[str]:
         return None
     msg = choices[0].get("message", {})
 
-    # Standard field
     content = msg.get("content") or ""
-
-    # vLLM Qwen3 puts reasoning in separate "reasoning" field
+    # vLLM reasoning-parser separates thinking into 'reasoning'; content has the answer
     reasoning = msg.get("reasoning") or ""
-
-    # reasoning_content (some CoT/reasoning models)
+    # Cogito/Apriel/deepseek: full answer (or raw thinking) in reasoning_content
     reasoning_content = msg.get("reasoning_content") or ""
 
-    # Priority: content > reasoning_content > reasoning
-    text = content or reasoning_content or reasoning
+    if content.strip():
+        return _strip_think_tags(content) or None
 
-    if not text:
-        return None
+    # vLLM: reasoning field is the clean extracted answer (not raw thinking)
+    if reasoning.strip():
+        return _strip_think_tags(reasoning) or None
 
-    # Strip <think>...</think> blocks if present (common with Qwen3 instruct)
-    text = _strip_think_tags(text)
+    # Cogito/Apriel pattern: reasoning_content holds the full answer
+    # (deepseek models: may be raw thinking if model hit max_tokens mid-think)
+    if reasoning_content.strip():
+        return _strip_think_tags(reasoning_content) or None
 
-    return text.strip() or None
+    return None
 
 
 def _strip_think_tags(text: str) -> str:
-    """Remove <think>...</think> CoT blocks from model output."""
+    """Remove <think>...</think> CoT blocks from model output.
+
+    Also handles truncated responses where ``<think>`` has no closing tag
+    (model hit max_tokens during reasoning) — discards everything from the
+    unclosed tag onward so raw thinking never leaks into the answer.
+    """
     import re
-    # Remove think blocks (non-greedy, handles nested poorly but good enough)
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    # Strip complete <think>...</think> blocks (multiline, non-greedy)
+    cleaned = re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL)
+    # Handle unclosed <think> tag (truncated mid-thinking)
+    if "<think>" in cleaned:
+        cleaned = cleaned[: cleaned.index("<think>")]
     return cleaned.strip()
 
 

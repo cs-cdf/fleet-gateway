@@ -6,6 +6,31 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.3.1] — 2026-03-19
+
+### Bug Fixes — CoT (Chain-of-Thought) extraction
+
+**`backends/openai_compat.py` — `_extract_content()` priority fix**
+- Old code: `text = content or reasoning_content or reasoning` — wrong priority caused raw
+  thinking to leak as the answer when `content` was empty (e.g. deepseek model hit `max_tokens`
+  mid-reasoning)
+- New priority: `content` → `reasoning` (vLLM clean answer field) → `reasoning_content`
+  (Cogito/Apriel answer, or deepseek raw thinking as last resort)
+- This matches vLLM's `--reasoning-parser qwen3` behavior: thinking goes to `reasoning`,
+  clean answer goes to `content`; when `content` is null vLLM puts the answer in `reasoning`
+
+**`_strip_think_tags()` — unclosed tag handling**
+- Old code: only stripped complete `<think>...</think>` blocks; an unclosed `<think>` (model
+  truncated mid-reasoning) would leak raw thinking verbatim
+- New code: if a `<think>` has no matching `</think>`, everything from the tag onward is
+  discarded — raw thinking never appears in the output
+
+**`tests/test_basic.py` — extended CoT coverage**
+- Added 11 new `TestExtractContent` cases covering: vLLM `reasoning` field, content priority,
+  think-tag stripping, unclosed tags, deepseek empty-content pattern
+
+---
+
 ## [0.3.0] — 2026-03-18
 
 ### Reliability & Security

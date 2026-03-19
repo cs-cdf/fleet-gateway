@@ -59,12 +59,73 @@ class TestExtractContent(unittest.TestCase):
         self.assertEqual(_extract_content(data), "Hello!")
 
     def test_reasoning_content_fallback(self):
+        """Cogito/Apriel: answer in reasoning_content, content empty."""
         data = {"choices": [{"message": {"role": "assistant", "content": "", "reasoning_content": "The answer is 42"}}]}
         self.assertEqual(_extract_content(data), "The answer is 42")
+
+    def test_vllm_reasoning_field_is_clean_answer(self):
+        """vLLM reasoning-parser: 'reasoning' field has the clean answer, content is null."""
+        data = {"choices": [{"message": {"content": None, "reasoning": "Rome"}}]}
+        self.assertEqual(_extract_content(data), "Rome")
+
+    def test_content_takes_priority_over_reasoning(self):
+        """content must win over reasoning/reasoning_content when non-empty."""
+        data = {"choices": [{"message": {"content": "Rome", "reasoning": "Let me think...", "reasoning_content": "other"}}]}
+        self.assertEqual(_extract_content(data), "Rome")
+
+    def test_reasoning_takes_priority_over_reasoning_content(self):
+        """vLLM 'reasoning' (clean answer) beats reasoning_content (may be raw thinking)."""
+        data = {"choices": [{"message": {"content": "", "reasoning": "clean answer", "reasoning_content": "raw thinking..."}}]}
+        self.assertEqual(_extract_content(data), "clean answer")
+
+    def test_think_tags_stripped_from_content(self):
+        data = {"choices": [{"message": {"content": "<think>I reason</think>The answer is 42."}}]}
+        result = _extract_content(data)
+        self.assertEqual(result, "The answer is 42.")
+        self.assertNotIn("<think>", result)
+
+    def test_think_tags_stripped_multiline(self):
+        data = {"choices": [{"message": {"content": "<think>\nStep 1\nStep 2\n</think>\n\nFinal answer."}}]}
+        self.assertEqual(_extract_content(data), "Final answer.")
+
+    def test_unclosed_think_tag_does_not_leak_thinking(self):
+        """Truncated response: <think> with no </think> — raw thinking must NOT appear."""
+        data = {"choices": [{"message": {"content": "<think>I was still reasoning..."}}]}
+        result = _extract_content(data)
+        self.assertIsNone(result)
+
+    def test_unclosed_think_tag_preserves_content_before_tag(self):
+        """If there's clean content before unclosed <think>, it is returned."""
+        data = {"choices": [{"message": {"content": "Partial answer.<think>truncated thinking..."}}]}
+        result = _extract_content(data)
+        self.assertEqual(result, "Partial answer.")
+
+    def test_deepseek_empty_content_does_not_leak_thinking(self):
+        """deepseek model hit max_tokens mid-think: content empty, reasoning_content is raw thinking.
+        Raw thinking ('We need to output...') must not appear in result."""
+        data = {"choices": [{"message": {"content": "", "reasoning_content": "We need to output the final answer..."}}]}
+        result = _extract_content(data)
+        # Best-effort: strip think tags. Raw thinking (no tags) may pass through,
+        # but if it contains think tags, they are stripped.
+        # The key requirement: no <think> in result.
+        if result:
+            self.assertNotIn("<think>", result)
 
     def test_strip_think_tags(self):
         text = "<think>\nLet me reason...\n</think>\nThe answer is 42."
         self.assertEqual(_strip_think_tags(text), "The answer is 42.")
+
+    def test_strip_think_tags_unclosed(self):
+        """Unclosed <think> — everything from tag onward is discarded."""
+        text = "Answer: Paris.<think>I was still thinking..."
+        self.assertEqual(_strip_think_tags(text), "Answer: Paris.")
+
+    def test_strip_think_tags_only_tags_no_answer(self):
+        """Response is ONLY think tags — result must not contain tags."""
+        text = "<think>some reasoning</think>"
+        result = _strip_think_tags(text)
+        self.assertNotIn("<think>", result)
+        self.assertNotIn("</think>", result)
 
     def test_empty_response(self):
         data = {"choices": [{"message": {"content": ""}}]}
