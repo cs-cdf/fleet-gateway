@@ -67,6 +67,130 @@ Lightweight OpenAI-compatible LLM gateway with smart routing, fallback chains, a
 
 ---
 
+## Architecture
+
+### System Overview
+
+```mermaid
+graph TB
+    subgraph Clients
+        A[Python API<br/>Fleet / fleet.call]
+        B[HTTP Client<br/>curl / OpenAI SDK]
+        C[Claude Code<br/>MCP tools]
+    end
+
+    subgraph fleet-gateway
+        direction TB
+        GW[Gateway Server<br/>POST /v1/chat/completions]
+        R[Router<br/>capability → chain]
+        RL[RateLimiter<br/>per-provider sliding window]
+        CB[CircuitBreaker<br/>per-backend]
+        Q[BackendQueue<br/>bounded concurrency]
+    end
+
+    subgraph Backends
+        direction TB
+        L1[Local — llama.cpp / vLLM<br/>Ollama / LM Studio]
+        C1[OpenAI-compat<br/>Groq · Gemini · Cerebras<br/>SambaNova · Mistral · NVIDIA]
+        C2[Anthropic<br/>native Messages API]
+    end
+
+    A -->|fleet.call| GW
+    B -->|POST /v1| GW
+    C -->|llm_call / llm_analyze_files| GW
+
+    GW --> R
+    R --> RL
+    RL --> CB
+    CB --> Q
+    Q --> L1
+    Q --> C1
+    Q --> C2
+
+    style GW fill:#2d6a4f,color:#fff
+    style R  fill:#1b4332,color:#fff
+    style RL fill:#40916c,color:#fff
+    style CB fill:#40916c,color:#fff
+    style Q  fill:#40916c,color:#fff
+```
+
+### Request Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway
+    participant RateLimiter
+    participant CircuitBreaker
+    participant Backend
+
+    Client->>Gateway: POST /v1/chat/completions<br/>{model: "coding", messages: [...]}
+
+    Gateway->>Gateway: resolve capability → routing chain<br/>[primary, fallback1, fallback2, ...]
+
+    loop For each entry in chain
+        Gateway->>RateLimiter: acquire_nowait(provider)
+        alt rate limit exceeded
+            RateLimiter-->>Gateway: wait=Xs → skip
+        else slot available
+            RateLimiter-->>Gateway: ok
+
+            Gateway->>CircuitBreaker: is_open(backend)?
+            alt circuit open
+                CircuitBreaker-->>Gateway: True → skip
+            else circuit closed
+                CircuitBreaker-->>Gateway: False
+
+                Gateway->>Backend: POST /v1/chat/completions
+                alt success
+                    Backend-->>Gateway: 200 + response
+                    Gateway-->>Client: 200 + response
+                    note right of Gateway: chain exits on first success
+                else failure
+                    Backend-->>Gateway: error / timeout
+                    Gateway->>CircuitBreaker: record_failure(backend)
+                    note right of Gateway: try next in chain
+                end
+            end
+        end
+    end
+
+    Gateway-->>Client: 503 all backends unavailable
+```
+
+### Routing Logic
+
+```mermaid
+flowchart TD
+    IN[Request: model=X] --> CAP{Is X a<br/>capability alias?}
+
+    CAP -->|yes| CHAIN[Load routing chain<br/>from config/fleet.yaml]
+    CAP -->|no| DIRECT[Treat as direct<br/>backend/model reference]
+    DIRECT --> CHAIN
+
+    CHAIN --> TRY[Try next entry in chain]
+
+    TRY --> RL{Rate limit<br/>OK?}
+    RL -->|no — skip| TRY
+    RL -->|yes| CB{Circuit<br/>breaker open?}
+
+    CB -->|open — skip| TRY
+    CB -->|closed| HEALTH{Backend<br/>healthy?}
+
+    HEALTH -->|no| FAIL1[record_failure] --> TRY
+    HEALTH -->|yes| CALL[Call backend]
+
+    CALL --> OK{Response<br/>received?}
+    OK -->|yes| NORM[Normalize CoT content<br/>think_tags / deepseek /<br/>reasoning_content]
+    NORM --> RETURN[Return to client ✓]
+
+    OK -->|no / error| FAIL2[record_failure<br/>try next] --> TRY
+
+    TRY -->|chain exhausted| ERR[503 — all backends unavailable]
+```
+
+---
+
 ## Provider Details
 
 Detailed breakdown of what you get with each provider.
@@ -583,6 +707,8 @@ claude-code/
 ├── settings_snippet.json      # paste into ~/.claude/settings.json
 ├── commands/                  # slash commands (skills)
 │   ├── fleet-review.md        # /fleet-review
+│   ├── fleet-code-review.md   # /fleet-code-review  ← file-aware, uses llm_analyze_files
+│   ├── fleet-diff.md          # /fleet-diff         ← review staged/recent git changes
 │   ├── fleet-consensus.md     # /fleet-consensus
 │   ├── fleet-loop.md          # /fleet-loop
 │   ├── fleet-challenge.md     # /fleet-challenge
@@ -656,6 +782,8 @@ Then type `/fleet-` in Claude Code to see all available commands:
 
 | Command | Description |
 |---------|-------------|
+| `/fleet-code-review [file(s)]` | File-aware review — pass paths directly, no manual reading; auto-routes to vision/coding |
+| `/fleet-diff [staged\|HEAD~1\|file]` | Review staged changes or a git diff before committing or opening a PR |
 | `/fleet-review [file or code]` | 3 models review in parallel → synthesized report |
 | `/fleet-consensus [question]` | Same question to N models → consensus answer |
 | `/fleet-loop [task]` | Generate → critique → improve × 3 cycles |
