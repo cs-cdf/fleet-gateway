@@ -69,125 +69,50 @@ Lightweight OpenAI-compatible LLM gateway with smart routing, fallback chains, a
 
 ## Architecture
 
-### System Overview
-
 ```mermaid
-graph TB
-    subgraph Clients
-        A[Python API<br/>Fleet / fleet.call]
-        B[HTTP Client<br/>curl / OpenAI SDK]
-        C[Claude Code<br/>MCP tools]
+%%{init: {'theme': 'base', 'themeVariables': {
+  'primaryColor': '#1a1a2e', 'primaryTextColor': '#fff',
+  'primaryBorderColor': '#4ecca3', 'lineColor': '#4ecca3',
+  'fontFamily': 'Inter, sans-serif'
+}}}%%
+graph LR
+    subgraph Clients["Clients"]
+        PY["🐍 Python<br/>fleet.call()"]
+        HTTP["🌐 HTTP<br/>curl / SDK"]
+        MCP["🤖 Claude Code<br/>MCP tools"]
     end
 
-    subgraph fleet-gateway
+    subgraph GW["fleet-gateway"]
         direction TB
-        GW[Gateway Server<br/>POST /v1/chat/completions]
-        R[Router<br/>capability → chain]
-        RL[RateLimiter<br/>per-provider sliding window]
-        CB[CircuitBreaker<br/>per-backend]
-        Q[BackendQueue<br/>bounded concurrency]
+        R["🔄 Router<br/>capability → chain<br/>O(1) model index"]
+        RL["⏱ RateLimiter<br/>sliding window"]
+        FILES["📎 Files + Patterns"]
     end
 
-    subgraph Backends
-        direction TB
-        L1[Local — llama.cpp / vLLM<br/>Ollama / LM Studio]
-        C1[OpenAI-compat<br/>Groq · Gemini · Cerebras<br/>SambaNova · Mistral · NVIDIA]
-        C2[Anthropic<br/>native Messages API]
+    subgraph Backends["Backends"]
+        L["🏠 Local<br/>llama.cpp · vLLM · Ollama"]
+        C["☁ OpenAI-compat<br/>Groq · Gemini · Mistral…"]
+        A["🦜 Anthropic<br/>native API"]
     end
 
-    A -->|fleet.call| GW
-    B -->|POST /v1| GW
-    C -->|llm_call / llm_analyze_files| GW
-
-    GW --> R
+    PY & HTTP & MCP --> R
     R --> RL
-    RL --> CB
-    CB --> Q
-    Q --> L1
-    Q --> C1
-    Q --> C2
+    RL --> L & C & A
+    R --> FILES
 
-    style GW fill:#2d6a4f,color:#fff
-    style R  fill:#1b4332,color:#fff
-    style RL fill:#40916c,color:#fff
-    style CB fill:#40916c,color:#fff
-    style Q  fill:#40916c,color:#fff
+    style GW fill:#1a1a2e,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style Backends fill:#0f3460,stroke:#4ecca3,color:#fff
+    style Clients fill:#e8f4f8,stroke:#1a1a2e,color:#1a1a2e
 ```
 
-### Request Flow
+Full architecture documentation: **[docs/architecture/](docs/architecture/)**
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Gateway
-    participant RateLimiter
-    participant CircuitBreaker
-    participant Backend
-
-    Client->>Gateway: POST /v1/chat/completions<br/>{model: "coding", messages: [...]}
-
-    Gateway->>Gateway: resolve capability → routing chain<br/>[primary, fallback1, fallback2, ...]
-
-    loop For each entry in chain
-        Gateway->>RateLimiter: acquire_nowait(provider)
-        alt rate limit exceeded
-            RateLimiter-->>Gateway: wait=Xs → skip
-        else slot available
-            RateLimiter-->>Gateway: ok
-
-            Gateway->>CircuitBreaker: is_open(backend)?
-            alt circuit open
-                CircuitBreaker-->>Gateway: True → skip
-            else circuit closed
-                CircuitBreaker-->>Gateway: False
-
-                Gateway->>Backend: POST /v1/chat/completions
-                alt success
-                    Backend-->>Gateway: 200 + response
-                    Gateway-->>Client: 200 + response
-                    note right of Gateway: chain exits on first success
-                else failure
-                    Backend-->>Gateway: error / timeout
-                    Gateway->>CircuitBreaker: record_failure(backend)
-                    note right of Gateway: try next in chain
-                end
-            end
-        end
-    end
-
-    Gateway-->>Client: 503 all backends unavailable
-```
-
-### Routing Logic
-
-```mermaid
-flowchart TD
-    IN[Request: model=X] --> CAP{Is X a<br/>capability alias?}
-
-    CAP -->|yes| CHAIN[Load routing chain<br/>from config/fleet.yaml]
-    CAP -->|no| DIRECT[Treat as direct<br/>backend/model reference]
-    DIRECT --> CHAIN
-
-    CHAIN --> TRY[Try next entry in chain]
-
-    TRY --> RL{Rate limit<br/>OK?}
-    RL -->|no — skip| TRY
-    RL -->|yes| CB{Circuit<br/>breaker open?}
-
-    CB -->|open — skip| TRY
-    CB -->|closed| HEALTH{Backend<br/>healthy?}
-
-    HEALTH -->|no| FAIL1[record_failure] --> TRY
-    HEALTH -->|yes| CALL[Call backend]
-
-    CALL --> OK{Response<br/>received?}
-    OK -->|yes| NORM[Normalize CoT content<br/>think_tags / deepseek /<br/>reasoning_content]
-    NORM --> RETURN[Return to client ✓]
-
-    OK -->|no / error| FAIL2[record_failure<br/>try next] --> TRY
-
-    TRY -->|chain exhausted| ERR[503 — all backends unavailable]
-```
+| Diagram | Description |
+|---------|-------------|
+| [System Overview](docs/architecture/system-overview.md) | All components with styling and descriptions |
+| [Request Flow](docs/architecture/request-flow.md) | End-to-end sequence: rate limiting → fallback → CoT normalization |
+| [Routing Logic](docs/architecture/routing-logic.md) | Flowchart: capability alias → model index → backend call |
+| [Module Map](docs/architecture/module-map.md) | Python module dependencies and public API contracts |
 
 ---
 
@@ -1032,6 +957,19 @@ pip install fleet-gateway[mcp]
 # Everything
 pip install fleet-gateway[all]
 ```
+
+---
+
+## Documentation
+
+| Path | Contents |
+|------|----------|
+| [docs/architecture/](docs/architecture/) | Architecture diagrams: system overview, request flow, routing logic, module map |
+| [claude-code/](claude-code/) | Claude Code MCP settings, slash command skills |
+| [templates/](templates/) | Prompt templates for all multi-model patterns |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [QUICKSTART.md](QUICKSTART.md) | 5-minute getting started guide |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
 
 ---
 

@@ -6,6 +6,43 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.3.3] — 2026-03-19
+
+### Reliability — Thread safety, O(1) routing, deep copy fix, standard logging
+
+**`router.py`**
+- Add `_cache_lock` (`threading.Lock`) protecting `_backend_cache` and `_limiters` dict
+  writes; uses double-checked locking — eliminates race condition under concurrent load
+- Pre-build `_model_index` (`{model_id: backend_name}`) at init time: bare model-ID
+  lookup is now O(1) instead of O(N×M) per request
+- Replace `_log` / `print(sys.stderr)` with `logging.getLogger(__name__)` — messages are
+  filterable via standard Python logging infrastructure
+
+**`files.py`**
+- `inject_files`: replace `[dict(msg) for msg in messages]` shallow copy with
+  `copy.deepcopy(messages)` — prevents nested `content` list mutations bleeding back
+  into the caller's messages
+
+**`tests/test_basic.py`** — 34 tests total (+4 new)
+- `test_model_index_built_at_init`, `test_cache_lock_exists`,
+  `test_concurrent_get_backend_no_crash`, `test_inject_files_deep_copy_no_mutation`
+
+### Documentation — Architecture folder
+
+**`docs/architecture/`** (new)
+- `README.md` — architecture landing page
+- `system-overview.md` — styled component map with Mermaid theming (dark navy/teal)
+- `request-flow.md` — autonumbered sequence diagram showing rate limiting, fallback
+  chain, and CoT normalization
+- `routing-logic.md` — color-coded flowchart including O(1) model index step
+- `module-map.md` — Python module dependency graph with public API contracts
+
+**`README.md`**
+- Architecture section replaced with compact inline diagram + link table to `docs/architecture/`
+- Added Documentation index table at end of file
+
+---
+
 ## [0.3.2] — 2026-03-19
 
 ### New Features — Cloud model deprecation detection
