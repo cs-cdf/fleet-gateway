@@ -11,12 +11,15 @@ Routing chain format:
 
 from __future__ import annotations
 
-import sys
+import logging
+import threading
 from typing import Any, Dict, List, Optional
 
 from .backends import get_backend
 from .config import Config
 from .ratelimit import RateLimiter
+
+logger = logging.getLogger(__name__)
 
 
 class Router:
@@ -28,20 +31,45 @@ class Router:
         self._backend_cache: Dict[str, Any] = {}
         # Per-backend rate limiters (populated on first access)
         self._limiters: Dict[str, RateLimiter] = {}
+        # Single lock protecting both _backend_cache and _limiters writes
+        self._cache_lock = threading.Lock()
+        # Pre-built index: bare model_id -> backend_name (O(1) lookup)
+        self._model_index: Dict[str, str] = self._build_model_index()
+
+    def _build_model_index(self) -> Dict[str, str]:
+        """Build a {model_id: backend_name} index from config for O(1) bare-ID lookup."""
+        index: Dict[str, str] = {}
+        for backend_name, cfg in self._config.backends.items():
+            for m in (cfg.get("models") or []):
+                for key in ("id", "model_id"):
+                    mid = m.get(key)
+                    if mid and mid not in index:
+                        index[mid] = backend_name
+        return index
 
     def _get_backend(self, backend_name: str):
-        if backend_name not in self._backend_cache:
-            cfg = self._config.get_backend(backend_name)
-            if cfg is None:
-                return None
-            self._backend_cache[backend_name] = get_backend(cfg)
+        # Fast path without lock
+        if backend_name in self._backend_cache:
+            return self._backend_cache[backend_name]
+        with self._cache_lock:
+            # Re-check inside lock (double-checked locking)
+            if backend_name not in self._backend_cache:
+                cfg = self._config.get_backend(backend_name)
+                if cfg is None:
+                    return None
+                self._backend_cache[backend_name] = get_backend(cfg)
         return self._backend_cache[backend_name]
 
     def _get_limiter(self, backend_name: str) -> RateLimiter:
-        if backend_name not in self._limiters:
-            cfg = self._config.get_backend(backend_name) or {}
-            rpm = cfg.get("rate_limit")
-            self._limiters[backend_name] = RateLimiter(rpm)
+        # Fast path without lock
+        if backend_name in self._limiters:
+            return self._limiters[backend_name]
+        with self._cache_lock:
+            # Re-check inside lock (double-checked locking)
+            if backend_name not in self._limiters:
+                cfg = self._config.get_backend(backend_name) or {}
+                rpm = cfg.get("rate_limit")
+                self._limiters[backend_name] = RateLimiter(rpm)
         return self._limiters[backend_name]
 
     def _resolve_entry(self, entry: str):
@@ -53,18 +81,11 @@ class Router:
             parts = entry.split("/", 1)
             backend_name, model_id = parts[0], parts[1]
         else:
-            # Bare model ID: search all backends
-            for name, cfg in self._config.backends.items():
-                for m in (cfg.get("models") or []):
-                    if m.get("id") == entry or m.get("model_id") == entry:
-                        backend_name = name
-                        model_id = entry
-                        break
-                else:
-                    continue
-                break
-            else:
+            # Bare model ID: O(1) index lookup instead of O(N×M) scan
+            backend_name = self._model_index.get(entry)
+            if backend_name is None:
                 return None, None, None
+            model_id = entry
 
         backend = self._get_backend(backend_name)
         if backend is None or not backend.is_available():
@@ -100,15 +121,15 @@ class Router:
         for entry in chain:
             backend, backend_name, model_id = self._resolve_entry(entry)
             if backend is None:
-                _log(f"Skipping {entry!r}: backend unavailable")
+                logger.debug("Skipping %r: backend unavailable", entry)
                 continue
 
             limiter = self._get_limiter(backend_name)
             if not limiter.acquire(timeout=timeout):
-                _log(f"Rate limit exceeded for {entry!r}, trying next...")
+                logger.debug("Rate limit exceeded for %r, trying next...", entry)
                 continue
 
-            _log(f"Trying {entry!r}...")
+            logger.debug("Trying %r...", entry)
             result = backend.call(
                 model_id=model_id,
                 messages=messages,
@@ -119,12 +140,12 @@ class Router:
                 **kwargs,
             )
             if result is not None:
-                _log(f"Success: {entry!r}")
+                logger.debug("Success: %r", entry)
                 return result
 
-            _log(f"Failed: {entry!r}, trying next...")
+            logger.debug("Failed: %r, trying next...", entry)
 
-        _log(f"All entries exhausted for {model_or_capability!r}")
+        logger.debug("All entries exhausted for %r", model_or_capability)
         return None
 
     def available_models(self) -> List[Dict[str, Any]]:
@@ -148,5 +169,3 @@ class Router:
         return dict(self._config.routing)
 
 
-def _log(msg: str):
-    print(f"[fleet_gateway.router] {msg}", file=sys.stderr, flush=True)

@@ -3,6 +3,7 @@ import base64
 import os
 import sys
 import tempfile
+import threading
 import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -153,6 +154,60 @@ class TestRouter(unittest.TestCase):
         cfg = Config({"backends": {}})
         router = Router(cfg)
         self.assertEqual(router.available_models(), [])
+
+    def test_model_index_built_at_init(self):
+        """Model index enables O(1) bare model-ID lookup."""
+        cfg = Config({
+            "backends": {
+                "groq": {
+                    "type": "openai_compat",
+                    "url": "https://api.groq.com/openai/v1",
+                    "api_key": "x",
+                    "models": [{"id": "llama-3.3-70b", "capabilities": ["coding"]}],
+                },
+            },
+        })
+        router = Router(cfg)
+        self.assertIn("llama-3.3-70b", router._model_index)
+        self.assertEqual(router._model_index["llama-3.3-70b"], "groq")
+
+    def test_cache_lock_exists(self):
+        """Router has a threading.Lock for cache protection."""
+        cfg = Config({"backends": {}})
+        router = Router(cfg)
+        self.assertIsInstance(router._cache_lock, type(threading.Lock()))
+
+    def test_concurrent_get_backend_no_crash(self):
+        """Concurrent _get_backend calls don't corrupt the cache."""
+        cfg = Config({"backends": {}})
+        router = Router(cfg)
+        errors = []
+
+        def worker():
+            try:
+                router._get_backend("nonexistent")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+
+    def test_inject_files_deep_copy_no_mutation(self):
+        """inject_files must not mutate the original messages list."""
+        import tempfile, os
+        from fleet_gateway.files import inject_files
+        tmp = tempfile.mkdtemp()
+        path = os.path.join(tmp, "f.py")
+        with open(path, "w") as fh:
+            fh.write("x = 1")
+        original = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
+        inject_files(original, [path])
+        # Original content list must still have exactly 1 element
+        self.assertEqual(len(original[0]["content"]), 1)
 
 
 class TestFileAttachments(unittest.TestCase):
