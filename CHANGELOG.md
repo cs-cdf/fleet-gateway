@@ -6,6 +6,20 @@ Format: [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.3.2] — 2026-03-19
+
+### New Features — Cloud model deprecation detection
+
+**`backends/openai_compat.py` — inline deprecation check**
+- When a cloud request fails with HTTP 404/410 or a body matching deprecation patterns
+  (e.g. "deprecated", "no longer available", "invalid model"), a background thread
+  automatically runs `fleet_model_checker.run_check()` for that provider
+- Check is debounced per provider (at most once per hour) to avoid hammering the API
+- Sends a Telegram alert if issues are found (requires `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ADMIN_CHAT_ID`)
+- Graceful degradation: if `fleet_model_checker` is not importable, the feature is silently skipped
+
+---
+
 ## [0.3.1] — 2026-03-19
 
 ### Bug Fixes — CoT (Chain-of-Thought) extraction

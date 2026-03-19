@@ -11,11 +11,52 @@ Zero external dependencies (stdlib only).
 from __future__ import annotations
 
 import json
+import sys
+import threading
+import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
 from .base import BaseBackend
+
+# Optional: model deprecation detection (fleet_model_checker in llm_tools/)
+try:
+    _llm_tools = Path(__file__).resolve().parents[4] / "_SHARED" / "llm_tools"
+    if str(_llm_tools) not in sys.path:
+        sys.path.insert(0, str(_llm_tools))
+    from fleet_model_checker import is_deprecation_error as _is_dep_error  # type: ignore
+    from fleet_model_checker import run_check as _run_model_check  # type: ignore
+    _DEPRECATION_CHECK_ENABLED = True
+except Exception:
+    _DEPRECATION_CHECK_ENABLED = False
+    def _is_dep_error(code, body): return False  # type: ignore
+    def _run_model_check(**kw): return []  # type: ignore
+
+_last_dep_check: Dict[str, float] = {}
+_DEP_CHECK_INTERVAL = 3600.0
+
+
+def _trigger_dep_check(provider: str) -> None:
+    """Debounced: schedule background model check at most once per hour per provider."""
+    now = time.time()
+    if now - _last_dep_check.get(provider, 0) < _DEP_CHECK_INTERVAL:
+        return
+    _last_dep_check[provider] = now
+    threading.Thread(target=_deprecation_bg, args=(provider,), daemon=True).start()
+
+
+def _deprecation_bg(provider: str) -> None:
+    """Background thread: run model check and log results."""
+    try:
+        results = _run_model_check(providers=[provider], notify=True)
+        for r in results:
+            for iss in r.issues:
+                if iss.issue_type == "not_found":
+                    _log(f"[model_checker] {r.provider}/{iss.model_id} deprecated. Suggest: {iss.suggested or 'unknown'}")
+    except Exception as exc:
+        pass  # best-effort
 
 
 class OpenAICompatBackend(BaseBackend):
@@ -73,6 +114,14 @@ class OpenAICompatBackend(BaseBackend):
         except urllib.error.HTTPError as e:
             # Log to stderr but don't raise — caller tries next backend
             _log(f"[{self.name}] HTTP {e.code} for model {actual_id}: {e.reason}")
+            if _DEPRECATION_CHECK_ENABLED:
+                body = ""
+                try:
+                    body = e.read(2048).decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                if _is_dep_error(e.code, body):
+                    _trigger_dep_check(self._provider_name())
             return None
         except urllib.error.URLError as e:
             _log(f"[{self.name}] Connection error for model {actual_id}: {e.reason}")
@@ -97,6 +146,14 @@ class OpenAICompatBackend(BaseBackend):
                 except Exception:
                     pass
         return "".join(parts) or None
+
+    def _provider_name(self) -> str:
+        """Infer provider name from base_url for deprecation check routing."""
+        url = self._base_url.lower()
+        for p in ("gemini", "openai", "anthropic", "groq", "mistral", "cerebras", "openrouter"):
+            if p in url:
+                return p
+        return "unknown"
 
     def list_models(self, timeout: float = 5.0) -> List[str]:
         """Query /v1/models and return list of model IDs."""
