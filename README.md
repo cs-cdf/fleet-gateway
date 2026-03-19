@@ -77,22 +77,22 @@ Lightweight OpenAI-compatible LLM gateway with smart routing, fallback chains, a
 }}}%%
 graph LR
     subgraph Clients["Clients"]
-        PY["🐍 Python<br/>fleet.call()"]
-        HTTP["🌐 HTTP<br/>curl / SDK"]
-        MCP["🤖 Claude Code<br/>MCP tools"]
+        PY["🐍 Python<br>fleet.call()"]
+        HTTP["🌐 HTTP<br>curl / SDK"]
+        MCP["🤖 Claude Code<br>MCP tools"]
     end
 
     subgraph GW["fleet-gateway"]
         direction TB
-        R["🔄 Router<br/>capability → chain<br/>O(1) model index"]
-        RL["⏱ RateLimiter<br/>sliding window"]
+        R["🔄 Router<br>capability → chain<br>O(1) model index"]
+        RL["⏱ RateLimiter<br>sliding window"]
         FILES["📎 Files + Patterns"]
     end
 
     subgraph Backends["Backends"]
-        L["🏠 Local<br/>llama.cpp · vLLM · Ollama"]
-        C["☁ OpenAI-compat<br/>Groq · Gemini · Mistral…"]
-        A["🦜 Anthropic<br/>native API"]
+        L["🏠 Local<br>llama.cpp · vLLM · Ollama"]
+        C["☁ OpenAI-compat<br>Groq · Gemini · Mistral"]
+        A["🦜 Anthropic<br>native API"]
     end
 
     PY & HTTP & MCP --> R

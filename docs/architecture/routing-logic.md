@@ -17,47 +17,52 @@ How `Router.call()` resolves a `model_or_capability` string to an actual backend
 flowchart TD
     IN(["📥 call(model_or_capability, messages)"])
 
-    IN --> CAP{Capability alias?<br/><small>e.g. 'coding', 'general'</small>}
+    IN --> CAP{Capability alias?}
 
-    CAP -->|yes| CHAIN["📋 Load routing chain<br/>from config / fleet.yaml<br/><small>['groq/llama-3.3-70b', 'gemini/...', ...]</small>"]
-    CAP -->|no — direct ref or bare ID| DIRECT["🎯 Single-entry chain<br/><small>'groq/model' or 'model-id'</small>"]
+    CAP -->|yes| CHAIN["📋 Load routing chain<br>from config / fleet.yaml"]
+    CAP -->|no| DIRECT["🎯 Single-entry chain<br>groq/model or bare model-id"]
     DIRECT --> CHAIN
 
-    CHAIN --> NEXT{More entries?}
-    NEXT -->|no — chain exhausted| FAIL(["❌ return None<br/>503 to HTTP client"])
+    CHAIN --> NEXT{More entries<br>in chain?}
+    NEXT -->|no — exhausted| FAIL(["❌ return None<br>503 to HTTP client"])
 
-    NEXT -->|yes| SLASH{Contains '/'?}
+    NEXT -->|yes| SLASH{Contains slash?}
 
-    SLASH -->|yes<br/>'backend/model'| SPLIT["Split on first '/'<br/>backend_name, model_id"]
-    SLASH -->|no — bare model ID| INDEX["🔍 O(1) model index lookup<br/><small>self._model_index[entry]</small>"]
+    SLASH -->|yes: backend/model| SPLIT["Split on first slash<br>backend_name + model_id"]
+    SLASH -->|no: bare model ID| INDEX["🔍 O(1) model index lookup<br>_model_index[entry]"]
 
-    INDEX --> FOUND{Found?}
+    INDEX --> FOUND{Found in index?}
     FOUND -->|no| NEXT
     FOUND -->|yes| SPLIT
 
-    SPLIT --> AVAIL{Backend available?<br/><small>_get_backend() + is_available()</small>}
+    SPLIT --> AVAIL{Backend available?<br>_get_backend + is_available}
     AVAIL -->|no| NEXT
 
-    AVAIL -->|yes| RL{Rate limit OK?<br/><small>acquire_nowait()</small>}
+    AVAIL -->|yes| RL{Rate limit OK?<br>acquire_nowait}
     RL -->|no — at capacity| NEXT
-    RL -->|yes — slot acquired| CALL["📡 backend.call(<br/>  model_id, messages,<br/>  max_tokens, temperature, ...)<br/>"]
+    RL -->|yes — slot acquired| CALL["📡 backend.call<br>model_id · messages<br>max_tokens · temperature"]
 
     CALL --> RES{Response?}
     RES -->|None — backend error| NEXT
-    RES -->|content string| COT["🧠 CoT normalization<br/><small>extract content → strip think tags</small>"]
+    RES -->|content string| COT["🧠 CoT normalization<br>extract content · strip think tags"]
     COT --> OK(["✅ return response"])
 
     style IN   fill:#4ecca3,stroke:#1a1a2e,color:#1a1a2e
     style OK   fill:#2a9d8f,stroke:#1a1a2e,color:#fff
     style FAIL fill:#e63946,stroke:#1a1a2e,color:#fff
-    style CAP  fill:#16213e,stroke:#4ecca3,color:#fff
-    style SLASH fill:#16213e,stroke:#4ecca3,color:#fff
-    style FOUND fill:#16213e,stroke:#4ecca3,color:#fff
-    style AVAIL fill:#16213e,stroke:#4ecca3,color:#fff
-    style RL    fill:#16213e,stroke:#4ecca3,color:#fff
-    style RES   fill:#16213e,stroke:#4ecca3,color:#fff
-    style NEXT  fill:#0f3460,stroke:#4ecca3,color:#fff
-    style INDEX fill:#1a1a2e,stroke:#4ecca3,color:#4ecca3
+    style CAP  fill:#16213e,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style SLASH fill:#16213e,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style FOUND fill:#16213e,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style AVAIL fill:#16213e,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style RL    fill:#16213e,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style RES   fill:#16213e,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style NEXT  fill:#0f3460,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style INDEX fill:#1a1a2e,stroke:#4ecca3,stroke-width:2px,color:#4ecca3
+    style SPLIT fill:#1a1a2e,stroke:#4ecca3,color:#fff
+    style CHAIN fill:#1a1a2e,stroke:#4ecca3,color:#fff
+    style DIRECT fill:#1a1a2e,stroke:#4ecca3,color:#fff
+    style CALL  fill:#1a1a2e,stroke:#4ecca3,color:#fff
+    style COT   fill:#16213e,stroke:#4ecca3,color:#fff
 ```
 
 ## Routing Chain Format

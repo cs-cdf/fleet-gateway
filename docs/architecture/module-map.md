@@ -15,27 +15,27 @@ Python module dependencies and public API surface of fleet-gateway.
 }}}%%
 flowchart TD
     subgraph Public["🌐 Public API"]
-        INIT["fleet_gateway<br/><code>__init__.py</code><br/><small>Fleet · call() · load_file<br/>inject_files · suggest_capability</small>"]
+        INIT["fleet_gateway.__init__<br>Fleet · call · load_file<br>inject_files · suggest_capability"]
     end
 
     subgraph Core["⚙ Core"]
-        ROUTER["router.py<br/><small>Router · _model_index<br/>_backend_cache · _cache_lock<br/>RateLimiter integration</small>"]
-        CONFIG["config.py<br/><small>Config · backends dict<br/>routing dict · auto-discovery</small>"]
-        RATELIMIT["ratelimit.py<br/><small>RateLimiter<br/>sliding window · thread-safe<br/>stdlib only</small>"]
-        SERVER["server.py<br/><small>WSGI HTTP server<br/>POST /v1/chat/completions<br/>GET /v1/models · health</small>"]
+        ROUTER["router.py<br>Router · _model_index<br>_backend_cache · _cache_lock"]
+        CONFIG["config.py<br>Config · backends · routing<br>auto-discovery"]
+        RATELIMIT["ratelimit.py<br>RateLimiter<br>sliding window · stdlib only"]
+        SERVER["server.py<br>WSGI server<br>POST /v1/chat/completions"]
     end
 
     subgraph Backends["🔌 Backends"]
-        OAI["backends/openai_compat.py<br/><small>OpenAICompatBackend<br/>CoT extraction · think-tag strip<br/>deprecation detection</small>"]
-        ANTHRO["backends/anthropic.py<br/><small>AnthropicBackend<br/>native Messages API<br/>image block conversion</small>"]
+        OAI["openai_compat.py<br>OpenAICompatBackend<br>CoT extraction · deprecation"]
+        ANTHRO["anthropic.py<br>AnthropicBackend<br>native API · image conversion"]
     end
 
     subgraph Extensions["🧩 Extensions"]
-        FILES["files.py<br/><small>load_file · inject_files<br/>suggest_capability<br/>path traversal guard</small>"]
-        PATTERNS["patterns.py<br/><small>consensus · loop · review<br/>challenge · brainstorm<br/>swot · perspectives · adversarial</small>"]
-        MCP["mcp.py<br/><small>llm_call · llm_analyze_files<br/>llm_search · llm_scrape<br/>llm_health · pattern tools</small>"]
-        SEARCH["search.py<br/><small>SearXNG integration</small>"]
-        SCRAPE["scrape.py<br/><small>Firecrawl integration</small>"]
+        FILES["files.py<br>load_file · inject_files<br>path traversal guard"]
+        PATTERNS["patterns.py<br>consensus · loop · review<br>challenge · brainstorm · swot"]
+        MCP["mcp.py<br>llm_call · llm_analyze_files<br>llm_search · llm_health"]
+        SEARCH["search.py<br>SearXNG integration"]
+        SCRAPE["scrape.py<br>Firecrawl integration"]
     end
 
     INIT --> ROUTER
@@ -64,9 +64,9 @@ flowchart TD
     OAI --> CONFIG
     ANTHRO --> CONFIG
 
-    style Public    fill:#4ecca3,stroke:#1a1a2e,color:#1a1a2e
-    style Core      fill:#1a1a2e,stroke:#4ecca3,stroke-width:2px,color:#fff
-    style Backends  fill:#0f3460,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style Public     fill:#4ecca3,stroke:#1a1a2e,stroke-width:2px,color:#1a1a2e
+    style Core       fill:#1a1a2e,stroke:#4ecca3,stroke-width:2px,color:#fff
+    style Backends   fill:#0f3460,stroke:#4ecca3,stroke-width:2px,color:#fff
     style Extensions fill:#16213e,stroke:#4ecca3,stroke-width:2px,color:#fff
 ```
 
